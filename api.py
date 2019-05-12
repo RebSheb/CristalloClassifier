@@ -96,7 +96,7 @@ class Learner():
                 print("[LABEL]: {llabel}".format(llabel=label))
                 #labels = le.fit_transform(labels).tolist()
                 imgCount = imgCount + 1
-            except Exception as e:
+            except Exception:
                 #print(e)
                 print("[WARNING] Image " + imagePath + "has invalid size and will be removed") # This is the image that is too big or mismatched to others.
                 os.remove(imagePath)
