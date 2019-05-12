@@ -35,7 +35,7 @@ from skimage import img_as_float
 app = Flask(__name__)
 api = Api(app)
 
-bioThreshold = -255.0
+
 bioActivationThreshold = 1
 modelPath = os.path.join(os.getcwd(), "files", "models")
 heatmapPath = os.path.join(os.getcwd(), "files","heatmap")
@@ -48,22 +48,15 @@ def openConnection():
     #Connect to database on program start
     global connection
     connection = mysql.connector.connect(
-        host="82.47.162.246",
+        host="127.0.0.1",
         port="3306",
         user="root",
         passwd="cristallo",
         database="main"
     )
-    #db.autocommit = True
     global cursor
     cursor = connection.cursor()
 
-    
-    #username = users[0]["username"]
-    #password = users[0]["password"]
-    #cursor.execute("SET SESSION TRANSACTION ISOLATION LEVEL READ COMMITTED")
-    #cursor.execute("INSERT INTO users(username, password_hash) VALUES(\"{}\", \"{}\")".format(username, password))
-    #db.commit()
     
 
 openConnection()
@@ -86,7 +79,6 @@ class Learner():
             imageArr.shape = (1, image.size[0] * image.size[1] * 4)
             if (imgCount == 0):
                 features.shape = (0, image.size[0] * image.size[1] * 4)
-            #print(imageArr.shape)
             try:
                 features = np.append(features, imageArr, axis=0)
                 label = imagePath.split(os.path.sep)[-2]
@@ -94,26 +86,16 @@ class Learner():
                 labels.append(label)
                 print("[IMGCOUNT]: {count}".format(count=imgCount))
                 print("[LABEL]: {llabel}".format(llabel=label))
-                #labels = le.fit_transform(labels).tolist()
                 imgCount = imgCount + 1
             except Exception:
-                #print(e)
                 print("[WARNING] Image " + imagePath + "has invalid size and will be removed") # This is the image that is too big or mismatched to others.
                 os.remove(imagePath)
                 imgCount = imgCount-1
                 continue
-            
-            #print(features.shape)
-
-
 
         labels = le.fit_transform(labels)
-        print(labels)
         #print(labels)
-        #labels.shape = (17,)
-
         
-        #clf = MLPRegressor(solver="adam", alpha=1e-5, hidden_layer_sizes=(15,), random_state=9867, learning_rate="constant")#, activation="tanh")
         if (os.path.isfile(os.path.join(modelPath, username))):
             with open(os.path.join(modelPath, username), "rb") as inModel:
                 userMLP = pickle.load(inModel)
@@ -127,19 +109,13 @@ class Learner():
 
         #Train model
         userMLP = userMLP.fit(features, labels)
-        #userMLP.score(np.array())
-        #f = open("models/{uname}".format(uname=username), "wb+")
-        #pickle.dump(userMLP, f)
+
         with open(os.path.join(modelPath, username), "wb") as outModel:
             pickle.dump(userMLP, outModel)
 
-        #userMLP.
+        return
 
-        #userMLP.
-        #Predict the user from the challenge heatmap
-        #print(userMLP.predict(cHArr))
-        #print("yay")
-        
+
     def testHeatmap(self, challengeHeatmap, username):
         cH = Image.open(challengeHeatmap)
         print("[CHALLENGE]: "+ challengeHeatmap)
@@ -215,37 +191,23 @@ class LoginUser(Resource):
         if(filename.endswith("csv")):
             with open(os.getcwd() + "\\files\\" + filename) as openFile:
                 #Read the received CSV into an ndarray.
-                #data = genfromtxt(os.getcwd() + "\\files\\" + filename, delimiter=',')
                 data = genfromtxt(openFile, delimiter=',')
                 
                 #Build the trigram data array
                 trigrams = np.zeros([data.shape[0] - 2, 3], dtype=int)
                 for i in range(0, data.shape[0] - 2):
                     #Set the trigram
-                    #trigrams[i, 0] = i
                     #Set the elapse time (final key timestamp - initial key timestamp)
                     elapse = (data[i + 2, 1] - data[i, 1])
-                    print(elapse, end='')
-                    print(" ", end='')
-                    #elapse = np.random.randint(self.elapseMin, self.elapseMax)
                     trigrams[i, 0] = self.permuteValue(elapse, self.elapseMin, self.elapseMax) * 255
                     #Set the keystroke duration
                     keystrokeDuration = data[i, 2] + data[i+1, 2] + data[i+2, 2]
-                    print(keystrokeDuration, end='')
-                    print(" ", end='')
-                    #keystrokeDuration = np.random.randint(self.kdMin, self.kdMax)
                     trigrams[i, 1] = self.permuteValue(keystrokeDuration, self.kdMin, self.kdMax) * 255
                     #Set the latency
                     latency = data[i, 3] + data[i+1, 3] + data[i+2, 3]
-                    print(latency, end='')
-                    print(" ", end='')
-                    #latency = np.random.randint(self.latencyMin, self.latencyMax)
                     trigrams[i, 2] = self.permuteValue(latency, self.latencyMin, self.latencyMax) * 255
-                    print("\n")
-            #os.remove(os.getcwd() + "\\files\\" + filename)
             return trigrams
         else:    
-            #os.remove(os.getcwd() + "\\files\\" + filename)
             return -1
 
 
@@ -254,9 +216,6 @@ class LoginUser(Resource):
         #Generate the heatmap from the extracted data.
         plt.axis('off')
         fig = plt.imshow(data, interpolation="nearest", cmap="seismic")
-
-
-        #print(data)
 
         #Remove whitespace
         fig.axes.get_xaxis().set_visible(False)
@@ -297,7 +256,6 @@ class LoginUser(Resource):
         nameContainer = [args["username"]]
         cursor.execute(userQuery, nameContainer)
         user = cursor.fetchone()
-        #user = 1
         #Attempt to authenticate user
         if user is None:
             return "User is inactive or does not exist", 404
@@ -345,4 +303,4 @@ class CreateUser(Resource):
 api.add_resource(CreateUser, "/user/create")
 api.add_resource(LoginUser, "/user/login")
 
-app.run(debug=True, host="127.0.0.1", port=5000)
+app.run(debug=True, host="0.0.0.0", port=5000)
