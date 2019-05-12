@@ -40,19 +40,23 @@ bioActivationThreshold = 1
 modelPath = os.path.join(os.getcwd(), "files", "models")
 heatmapPath = os.path.join(os.getcwd(), "files","heatmap")
 
+
+labels = []
+le = LabelEncoder()
+
 def openConnection():
     #Connect to database on program start
-    #global connection
-    #connection = mysql.connector.connect(
-    #    host="127.0.0.1",
-    #    port="3306",
-    #    user="root",
-    #    passwd="admin",
-    #    database="users"
-    #)
+    global connection
+    connection = mysql.connector.connect(
+        host="82.47.162.246",
+        port="3306",
+        user="root",
+        passwd="cristallo",
+        database="main"
+    )
     #db.autocommit = True
     global cursor
-    #cursor = connection.cursor(prepared=True)
+    cursor = connection.cursor()
 
     
     #username = users[0]["username"]
@@ -67,7 +71,8 @@ imgCount = 0
 class Learner():
     def trainModel(self, username):
         imagePaths = paths.list_images(os.path.join(os.getcwd(), "files","heatmap"))
-
+        global labels
+        global le
         #Becomes 2D array of images as floats
         features = 0
         features = np.zeros([0, 0])
@@ -151,29 +156,32 @@ class Learner():
         else:
             return -1.0
         #Predict the user from the challenge heatmap
-        data = []
-        data.append(cHArr)
-        (trainX, testX, trainY, testY) = train_test_split (data, [0], test_size=0)
+        #data = []
+        #data.append(cHArr)
+        #(trainX, testX, trainY, testY) = train_test_split (data, [0], test_size=0)
 
 
 
         result = userMLP.predict(cHArr)
-        for i in range(0,10,1):
-            result = userMLP.predict(cHArr)
-            print("[RESULT]: {res}".format(res=result))
-            print("[RESULT LEN]: {res}".format(res=len(result)))
+        #for i in range(0,10,1):
+        #    result = userMLP.predict(cHArr)
+        #    print("[RESULT]: {res}".format(res=result))
+        #    print("[RESULT LEN]: {res}".format(res=len(result)))
 
         #print("[SCORE]: {mlpscore}".format(mlpscore=userMLP.score(result, np.asarray(imgCount))))
         #arya = []
       
+        trueUser = le.inverse_transform(result)
+        
         #arya.append(0)
         print("[RESULT]: {res}".format(res=result))
-        print("[RESULT LEN]: {res}".format(res=len(result)))
+        print("[ANSWER]: {ans}".format(ans=trueUser))
+        #print("[RESULT LEN]: {res}".format(res=len(result)))
         #print("[SCORE]: {mlpscore}".format(mlpscore=userMLP.score(result, np.asarray(imgCount))))
-        print("[REPORT]:\n {score}".format(score=userMLP.score(cHArr, result))) #target_names=le.classes_)))
-
-        return result
-        
+        #print("[REPORT]:\n {score}".format(score=userMLP.score(cHArr, result))) #target_names=le.classes_)))
+        if trueUser[0] == username:
+            return True
+        return False
 
 class LoginUser(Resource):
     #Heatmap clamp values, affects the data range that can be represented
@@ -264,7 +272,7 @@ class LoginUser(Resource):
 
         #Image is downscaled for efficiency.
         img = Image.open(filename)
-        img = img.resize((round(img.size[0] / 10), round(img.size[1] / 10)))
+        img = img.resize((16, 48))
         img.save(filename)
         return filename
 
@@ -277,7 +285,7 @@ class LoginUser(Resource):
             return False
         
     def post(self):
-        userQuery = "SELECT username, password_hash FROM users WHERE users.username = %s AND users.active = 1"
+        userQuery = "SELECT username, password_hash FROM users WHERE users.username = %s"
         parser = reqparse.RequestParser()
         parser.add_argument("username", required=True)
         parser.add_argument("passHash", required=True)
@@ -287,14 +295,14 @@ class LoginUser(Resource):
         
         
         nameContainer = [args["username"]]
-        #cursor.execute(userQuery, nameContainer)
-        #user = cursor.fetchone()
-        user = 1
+        cursor.execute(userQuery, nameContainer)
+        user = cursor.fetchone()
+        #user = 1
         #Attempt to authenticate user
         if user is None:
             return "User is inactive or does not exist", 404
         else:
-            if args["passHash"]:# == user[1]:
+            if args["passHash"] == user[1]:
                 #Generate heatmap
                 heatData = self.getHeatmapData(args)
                 heatFilename = self.generateHeatmap(heatData, args["username"])
@@ -304,7 +312,7 @@ class LoginUser(Resource):
                     learner.trainModel(args["username"])
                     bioScore = learner.testHeatmap(heatFilename, args["username"])
                     print(bioScore)
-                    if bioScore > bioThreshold:
+                    if bioScore is True:
                         os.rename(heatFilename, heatmapPath + "/" + args["username"] + "/" + str(int(time.time())) + ".png")
                         return "User credentials accepted", 200
                     else:
@@ -313,7 +321,7 @@ class LoginUser(Resource):
                     os.rename(heatFilename, heatmapPath + "/" + args["username"] + "/" + str(int(time.time())) + ".png")
                     return "User credentials accepted", 200
             else:
-                return "Invalid credentials", 401
+                return "Invalid credentials", 402
         
         return
 
@@ -328,8 +336,8 @@ class CreateUser(Resource):
         #Attempt to create user
         try:
             argsContainer = [args["username"], args["passHash"]]
-            #cursor.execute(userQuery, argsContainer)
-            #connection.commit()
+            cursor.execute(userQuery, argsContainer)
+            connection.commit()
             return "User created successfully.", 201
         except mysql.connector.errors.IntegrityError:
             return "User could not be created. Does it already exist?", 409
